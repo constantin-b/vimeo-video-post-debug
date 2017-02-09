@@ -1,10 +1,10 @@
 <?php 
 /*
  Plugin Name: Vimeo Videos - debug utility plugin
- Plugin URI: 
- Description: Debug for Vimeo Video Post plugin
+ Plugin URI: https://github.com/constantin-b/vimeo-video-post-debug
+ Description: Debug utility for plugin Vimeo Video Post PRO by CodeFlavors
  Author: CodeFlavors
- Version: 1.0
+ Version: 1.0.1
  Author URI: https://codeflavors.com
  */
 
@@ -32,6 +32,9 @@ class CF_VVP_Debug{
 		add_action( 'cvm_debug_request_error', array( $this, 'register_error' ), 10, 1 );
 		add_action( 'cvm_debug_automatic_import', array( $this, 'register_error' ), 10, 1 );
 		add_action( 'cvm_debug_bulk_import', array( $this, 'register_error' ), 10, 1 );
+		
+		// process errors sent by the plugin
+		add_action( 'cvm_debug_message', array( $this, 'register_message' ), 10, 3 );
 	}
 	
 	/**
@@ -42,15 +45,16 @@ class CF_VVP_Debug{
 		if( !$CVM_POST_TYPE ){
 			return;
 		}
-		
-		$this->cpt = $CVM_POST_TYPE;
-		
+		$this->cpt = $CVM_POST_TYPE;		
 	}
 	
 	/**
 	 * Add debug page to main plugin menu
 	 */
 	public function menu_pages(){
+		if( !$this->cpt ){
+			return;
+		}
 		
 		$debug = add_submenu_page(
 			'edit.php?post_type=' . $this->cpt->get_post_type(),
@@ -165,6 +169,8 @@ textarea.scrollTop = textarea.scrollHeight;
 <?php
 	}
 	
+	
+	
 	/**
 	 * Store errors in error log
 	 * @param WP_Error $error
@@ -175,9 +181,22 @@ textarea.scrollTop = textarea.scrollHeight;
 			return;
 		}
 		
-		$codes = $error->get_error_codes();
+		$error_log = plugin_dir_path( __FILE__ ) . 'error_log';
+		//*
+		if( filesize( $error_log ) >= pow(1024, 2) ){
+			$filename = wp_unique_filename( plugin_dir_path( __FILE__ ), 'error_log' );
+			$result = rename( $error_log , plugin_dir_path( __FILE__ ) . $filename );
+			if( !$result ){
+				//@todo do something in case the file could not be renamed
+			}
+		}
+		//*/
 		
-		$handle = fopen( plugin_dir_path( __FILE__ ) . 'error_log' , "a" );
+		$codes = $error->get_error_codes();		
+		$handle = fopen( $error_log , "a" );
+		if( false === $handle ){
+			return;
+		}
 		
 		foreach( $codes as $code ){
 			$message = $error->get_error_message( $code );
@@ -195,6 +214,37 @@ textarea.scrollTop = textarea.scrollHeight;
 		}
 		
 		fclose( $handle );		
+	}
+	
+	public function register_message( $message, $separator, $data ){
+		
+		$error_log = plugin_dir_path( __FILE__ ) . 'error_log';
+		//*
+		if( filesize( $error_log ) >= pow(1024, 2) ){
+			$filename = wp_unique_filename( plugin_dir_path( __FILE__ ), 'error_log' );
+			$result = rename( $error_log , plugin_dir_path( __FILE__ ) . $filename );
+			if( !$result ){
+				//@todo do something in case the file could not be renamed
+			}
+		}
+		//*/
+		
+		$handle = fopen( $error_log, "a" );
+		if( false === $handle ){
+			return;
+		}
+		
+		$log_entry = sprintf(
+				__( '[%s] %s', 'cvm_video' ),
+				date( 'M/d/Y H:i:s' ),
+				$message
+				//"\n" . print_r( $data, true )
+		);
+			
+		fwrite( $handle, $log_entry ."\n" );
+		
+		fclose( $handle );
+		
 	}
 	
 	/**
